@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
+import org.graphstream.ui.view.Viewer;
 
 public class NetworkVisualizer {
     private Graph graph;
@@ -108,40 +109,48 @@ public class NetworkVisualizer {
     }
 
     public void computeLinkLoads() {
-        // Reset all loads to zero initially (if dynamically changing weights/traffic)
-        linkLoads.clear(); // Clear old data
+        System.out.println("Computing link loads...");
+        linkLoads.clear();
         for (Edge edge : graph.edges().toArray(Edge[]::new)) {
-            edge.setAttribute("load", 0.0); // Reset loads to zero
-        }
-
-        // Apply the traffic matrix to the relevant edges
-        trafficMatrix.forEach((key, value) -> {
-            Edge e = graph.getEdge(key);
-            if (e != null) {
-                double existingLoad = e.getAttribute("load", Double.class);
-                double newLoad = existingLoad + value;
-                e.setAttribute("load", newLoad); // Update edge load
-                e.setAttribute("ui.label", String.format("%.2f", newLoad));
-                linkLoads.put(key, newLoad); // Store the updated load in the map
+            String edgeId = edge.getId();
+            double weight = edge.getAttribute("weight", Double.class);
+            Double traffic = trafficMatrix.get(edgeId);
+            if (traffic == null) {
+                System.out.println("No traffic data for edge: " + edgeId);
+                continue; // skip if no traffic is defined for this edge
             }
-        });
+            double load = weight * traffic;
+            System.out.println("Edge: " + edgeId + ", Weight: " + weight + ", Traffic: " + traffic + ", Load: " + load);
+            edge.setAttribute("load", load);
+            edge.setAttribute("ui.label", String.format("%.2f", load));
+            linkLoads.put(edgeId, load);
+        }
     }
 
     public void updateGraphColors() {
-        double maxLoad = linkLoads.values().stream().mapToDouble(v -> v).max().orElse(1.0);
+        double maxLoad = linkLoads.values().stream().mapToDouble(Double::doubleValue).max().orElse(1.0); // Ensure there's a default to avoid division by zero
         for (Edge edge : graph.edges().toArray(Edge[]::new)) {
             Double load = edge.getAttribute("load", Double.class);
-            load = (load != null) ? load : 0.0; // Ensure load is not null
+            load = (load != null) ? load : 0.0; // Default to zero if load is not set
 
-            // Determine color based on load thresholds
-            String color = (load < 0.5 * maxLoad) ? "green" : (load < 0.8 * maxLoad) ? "orange" : "red";
+            // Determine the color based on load thresholds
+            String color;
+            if (load < 0.5 * maxLoad) {
+                color = "green";
+            } else if (load < 0.8 * maxLoad) {
+                color = "orange";
+            } else {
+                color = "red";
+            }
+
             edge.setAttribute("ui.style", "fill-color: " + color + ";");
         }
     }
 
-
     public void display() {
-        graph.display();
+        Viewer viewer = graph.display();
+        viewer.setCloseFramePolicy(Viewer.CloseFramePolicy.HIDE_ONLY);  // Ensures the frame isn't disposed
+        viewer.enableAutoLayout();  // Optionally enable automatic layout
     }
 
     public void changeLinkWeight() {
@@ -151,15 +160,25 @@ public class NetworkVisualizer {
         if (parts.length == 2) {
             String[] nodes = parts[0].split("-");
             if (nodes.length == 2) {
-                Edge e = graph.getEdge(nodes[0] + "-" + nodes[1]);
+                String edgeId = nodes[0].trim() + "-" + nodes[1].trim();
+                Edge e = graph.getEdge(edgeId);
                 if (e != null) {
-                    double newWeight = Double.parseDouble(parts[1]);
-                    e.setAttribute("weight", newWeight);
-                    e.setAttribute("ui.label", String.format("%.2f", newWeight));
-                    System.out.println("Weight updated for edge " + parts[0] + " to " + parts[1]);
-                    computeLinkLoads();
-                    updateGraphColors();
-                    refreshGraph(); // Refresh the graph to update visual changes.
+                    try {
+                        double newWeight = Double.parseDouble(parts[1].trim());
+                        e.setAttribute("weight", newWeight);
+                        e.setAttribute("ui.label", String.format("%.2f", newWeight));
+                        System.out.println("Weight updated for edge " + edgeId + " to " + newWeight);
+                        computeLinkLoads();  // Recompute loads
+                        System.out.println("Recomputing loads after weight update...");
+                        for (Edge edge : graph.edges().toArray(Edge[]::new)) {
+                            System.out.println("Edge: " + edge.getId() + ", Load: " + edge.getAttribute("load"));
+                        }
+                        computeLinkLoads();
+                        updateGraphColors();
+                        refreshGraph();
+                    } catch (NumberFormatException ex) {
+                        System.out.println("Invalid weight format!");
+                    }
                 } else {
                     System.out.println("Edge not found!");
                 }
@@ -171,14 +190,19 @@ public class NetworkVisualizer {
         }
     }
 
+
+
     public void refreshGraph() {
         for (Node node : graph) {
-            node.setAttribute("ui.style", "size: 30px; fill-color: black;");
+            node.setAttribute("ui.class", "refresh");
+            node.removeAttribute("ui.class");
         }
         for (Edge edge : graph.edges().toArray(Edge[]::new)) {
-            edge.setAttribute("ui.style", "fill-color: grey;"); // Reset to default before applying new color based on load
+            edge.setAttribute("ui.class", "refresh");
+            edge.removeAttribute("ui.class");
         }
     }
+
 
     public void interactiveMode() {
         display();
