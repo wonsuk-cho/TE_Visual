@@ -109,31 +109,36 @@ public class NetworkVisualizer {
 
     public void computeLinkLoads() {
         // Reset all loads to zero initially (if dynamically changing weights/traffic)
+        linkLoads.clear(); // Clear old data
         for (Edge edge : graph.edges().toArray(Edge[]::new)) {
-            edge.setAttribute("load", 0.0);
+            edge.setAttribute("load", 0.0); // Reset loads to zero
         }
 
         // Apply the traffic matrix to the relevant edges
         trafficMatrix.forEach((key, value) -> {
-            if (graph.getEdge(key) != null) {
-                Edge e = graph.getEdge(key);
+            Edge e = graph.getEdge(key);
+            if (e != null) {
                 double existingLoad = e.getAttribute("load", Double.class);
-                e.setAttribute("load", existingLoad + value); // Sum up traffic if multiple entries affect the same edge
-                e.setAttribute("ui.label", String.format("%.2f", existingLoad + value));
+                double newLoad = existingLoad + value;
+                e.setAttribute("load", newLoad); // Update edge load
+                e.setAttribute("ui.label", String.format("%.2f", newLoad));
+                linkLoads.put(key, newLoad); // Store the updated load in the map
             }
         });
     }
 
     public void updateGraphColors() {
-        double maxLoad = linkLoads.values().stream().mapToDouble(Double::doubleValue).max().orElse(1.0);
+        double maxLoad = linkLoads.values().stream().mapToDouble(v -> v).max().orElse(1.0);
         for (Edge edge : graph.edges().toArray(Edge[]::new)) {
-            Double load = edge.getAttribute("load", Double.class); // Retrieve the load correctly
-            load = (load != null) ? load : 0.0;  // Set default to 0.0 if null
+            Double load = edge.getAttribute("load", Double.class);
+            load = (load != null) ? load : 0.0; // Ensure load is not null
 
-            String color = (load > 0.8 * maxLoad) ? "red" : (load > 0.5 * maxLoad) ? "orange" : "green";
+            // Determine color based on load thresholds
+            String color = (load < 0.5 * maxLoad) ? "green" : (load < 0.8 * maxLoad) ? "orange" : "red";
             edge.setAttribute("ui.style", "fill-color: " + color + ";");
         }
     }
+
 
     public void display() {
         graph.display();
