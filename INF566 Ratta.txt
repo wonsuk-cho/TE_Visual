@@ -1,0 +1,33 @@
+// Initialization
+
+// Scale down all link weights to 1-10 : There is no need to have link weights between 1 and 65535 to get something optimised ! 
+// Makes things way simpler (we can then be "brute force" by testing all values between 1 and 10… and it won't take ages).
+// Also helps to have ECMP paths (more likely to have several paths with same total weights if there is less possible values). 
+max=10;
+scale_down_link_weights(max);
+
+
+// Pre-computation 
+ Compute_link_load();  // Assign traffic on links based on routing (current weights) and compute link loads
+                                            / important: It should support ECMP  
+(arg_max,max_link_load)=compute_max_link_load().  // Get the max over all the links. arg_max is the id of the most loaded link. 
+
+// Main loop 
+Do {
+ 
+  // Select the most loaded link
+  link=arg_max;
+  // Try different values of weight for this link weight
+  For (w=1;w<max; w++) {
+     weight[link]=w;  // adapt based on your structure (it's pseudo code !!!)
+     // compute what it gives
+     Compute_link_load();   // Assign traffic on links based on routing (current weights) and compute link loads
+     get_link_load(link).   // Get the load of the link considered
+  } 
+  // Select the value w giving the best outcome (minimal link_load)… 
+       weight[link]=w_min; 
+       // Recompute everything (prepare next iteration) 
+        Compute_link_load(); 
+       (arg_max,max_link_load)=compute_max_link_load().   // Get the max over all the links. arg_max is the id of the most loaded link. 
+} while (significant changes)   // We stop the loop when there is no significant gain (say less than 1%)
+     
