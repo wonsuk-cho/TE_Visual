@@ -210,20 +210,33 @@ public class NetworkVisualizer {
         System.out.println("Optimizing OSPF weights using local search...");
         int iterations = 5000;
         Random rand = new Random();
+        double bestCost = computeTotalCost();
 
         for (int iter = 0; iter < iterations; iter++) {
             // Randomly select an edge to modify
             Edge edge = graph.getEdge(rand.nextInt(graph.getEdgeCount()));
             if (edge == null) continue;
 
+            // Retrieve current weight
             double currentWeight = edge.getAttribute("weight", Double.class);
-            double newWeight = currentWeight + rand.nextDouble() * 2 - 1; // Random change between -1 and +1
+            // Apply a small change to the weight
+            double newWeight = currentWeight + (rand.nextDouble() * 0.2 - 0.1); // Random change between -0.1 and +0.1
             if (newWeight <= 0) newWeight = 1; // Ensure weights are positive
 
+            // Set the new weight
             edge.setAttribute("weight", newWeight);
-            computeLinkLoads(); // Recompute loads after weight change
-            updateGraphColors(); // Update edge colors based on new loads
-            System.out.println("Iteration " + iter + ": Updated weight of edge " + edge.getId() + " to " + newWeight);
+
+            // Recompute loads and cost with the new weight
+            computeLinkLoads();
+            double currentCost = computeTotalCost();
+
+            if (currentCost < bestCost) {
+                bestCost = currentCost;
+                System.out.println("Iteration " + iter + ": Improved cost to " + currentCost + " with weight " + newWeight + " on edge " + edge.getId());
+            } else {
+                // Revert to the old weight if no improvement
+                edge.setAttribute("weight", currentWeight);
+            }
 
             if (iter % 100 == 0) {
                 System.out.println("Intermediate stats after " + iter + " iterations:");
@@ -231,6 +244,18 @@ public class NetworkVisualizer {
             }
         }
     }
+
+    // Compute the total cost of the network
+    public double computeTotalCost() {
+        double totalCost = 0.0;
+        for (Edge edge : graph.edges().toArray(Edge[]::new)) {
+            double load = edge.getAttribute("load", Double.class);
+            double weight = edge.getAttribute("weight", Double.class);
+            totalCost += load * weight; // Simple cost function, can be more complex
+        }
+        return totalCost;
+    }
+
 
     public void interactiveMode() {
         display();
