@@ -227,7 +227,7 @@ public class NetworkVisualizer {
             edge.setAttribute("weight", newWeight);
 
             // Recompute loads and cost with the new weight
-            computeLinkLoads();
+//            computeLinkLoads();
             double currentCost = computeTotalCost();
 
             if (currentCost < bestCost) {
@@ -238,10 +238,10 @@ public class NetworkVisualizer {
                 edge.setAttribute("weight", currentWeight);
             }
 
-            if (iter % 100 == 0) {
-                System.out.println("Intermediate stats after " + iter + " iterations:");
-                displayLoadStatistics();
-            }
+//            if (iter % 100 == 0) {
+//                System.out.println("Intermediate stats after " + iter + " iterations:");
+//                displayLoadStatistics();
+//            }
         }
     }
 
@@ -261,7 +261,7 @@ public class NetworkVisualizer {
         display();
         String command = "";
         while (!command.equals("exit")) {
-            System.out.println("Enter command ('update' to change weight, 'optimize' to run optimization, 'stats' to display statistics, 'exit' to quit):");
+            System.out.println("Enter command ('update' to change weight, 'optimize' to run optimization, 'stats' to display statistics, 'compute' to display computation, 'exit' to quit):");
             command = scanner.nextLine().trim();
             switch (command) {
                 case "update":
@@ -272,6 +272,9 @@ public class NetworkVisualizer {
                     break;
                 case "stats":
                     displayLoadStatistics();
+                    break;
+                case "compute":
+                    computeLinkLoads();
                     break;
                 case "exit":
                     System.out.println("Exiting...");
