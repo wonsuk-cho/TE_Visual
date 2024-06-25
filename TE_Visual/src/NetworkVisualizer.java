@@ -232,30 +232,6 @@ public class NetworkVisualizer {
         }
     }
 
-
-//    public void interactiveMode() {
-//        display();
-//        String command = "";
-//        while (!command.equals("exit")) {
-//            System.out.println("Enter command ('update' to change weight, 'stats' to display statistics, 'exit' to quit):");
-//            command = scanner.nextLine().trim();
-//            switch (command) {
-//                case "update":
-//                    changeLinkWeight();
-//                    break;
-//                case "stats":
-//                    displayLoadStatistics();
-//                    break;
-//                case "exit":
-//                    System.out.println("Exiting...");
-//                    break;
-//                default:
-//                    System.out.println("Unknown command. Please try again.");
-//                    break;
-//            }
-//        }
-//    }
-
     public void interactiveMode() {
         display();
         String command = "";
