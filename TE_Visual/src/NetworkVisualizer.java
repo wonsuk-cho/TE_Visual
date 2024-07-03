@@ -1,5 +1,6 @@
 import org.graphstream.graph.*;
 import org.graphstream.graph.implementations.*;
+import org.graphstream.algorithm.Dijkstra;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
@@ -69,7 +70,7 @@ public class NetworkVisualizer {
                     String edgeId = node1 + "-" + node2;
                     Edge e = graph.addEdge(edgeId, node1, node2, true); // true for directed, false or omit for undirected
                     e.setAttribute("weight", weight);
-                    e.setAttribute("ui.label", String.format("%.2f", Double.parseDouble(components[2])));
+                    e.setAttribute("ui.label", String.format("%.2f", weight));
                 }
             }
         } catch (IOException e) {
@@ -81,19 +82,15 @@ public class NetworkVisualizer {
     public void readTrafficMatrix(String filePath) throws IOException {
         try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
             String line;
-            int lineNumber = 0;
             while ((line = br.readLine()) != null) {
-                lineNumber++;
-                // Splits the line into two parts: "A-B" and "100"
                 String[] parts = line.split(",");
                 if (parts.length != 2) {
-                    System.out.println("Skipping invalid line " + lineNumber + ": " + line);
+                    System.out.println("Skipping invalid line: " + line);
                     continue;
                 }
-                // Further splits the first part into two nodes: "A" and "B"
                 String[] nodes = parts[0].split("-");
                 if (nodes.length != 2) {
-                    System.out.println("Invalid edge format on line " + lineNumber + ": " + line);
+                    System.out.println("Invalid edge format: " + line);
                     continue;
                 }
                 try {
@@ -101,7 +98,7 @@ public class NetworkVisualizer {
                     double trafficValue = Double.parseDouble(parts[1].trim());
                     trafficMatrix.put(edgeKey, trafficValue);
                 } catch (NumberFormatException e) {
-                    System.out.println("Invalid traffic value on line " + lineNumber + ": " + line);
+                    System.out.println("Invalid traffic value: " + line);
                 }
             }
         } catch (IOException e) {
@@ -113,29 +110,65 @@ public class NetworkVisualizer {
     public void computeLinkLoads() {
         System.out.println("Computing link loads...");
         linkLoads.clear();
+
+        // Reset all link loads
         for (Edge edge : graph.edges().toArray(Edge[]::new)) {
-            String edgeId = edge.getId();
-            double weight = edge.getAttribute("weight", Double.class);
-            Double traffic = trafficMatrix.get(edgeId);
-            if (traffic == null) {
-                System.out.println("No traffic data for edge: " + edgeId);
-                continue; // skip if no traffic is defined for this edge
+            edge.setAttribute("load", 0.0);
+        }
+
+        // For each traffic demand, compute the shortest path and distribute the traffic
+        for (String key : trafficMatrix.keySet()) {
+            String[] nodes = key.split("-");
+            String source = nodes[0];
+            String destination = nodes[1];
+            double traffic = trafficMatrix.get(key);
+
+            // Compute shortest path using Dijkstra's algorithm
+            Path path = computeShortestPath(source, destination);
+            if (path != null) {
+                for (Edge edge : path.getEdgePath()) {
+                    double currentLoad = edge.getAttribute("load", Double.class);
+                    edge.setAttribute("load", currentLoad + traffic);
+                }
             }
-            double load = weight * traffic;
-            System.out.println("Edge: " + edgeId + ", Weight: " + weight + ", Traffic: " + traffic + ", Load: " + load);
-            edge.setAttribute("load", load);
+        }
+
+        // Update the graph labels and colors
+        for (Edge edge : graph.edges().toArray(Edge[]::new)) {
+            double load = edge.getAttribute("load", Double.class);
             edge.setAttribute("ui.label", String.format("%.2f", load));
-            linkLoads.put(edgeId, load);
+            linkLoads.put(edge.getId(), load);
+        }
+
+        updateGraphColors();
+        // Display the computed link loads
+        displayLinkLoads();
+    }
+
+    private Path computeShortestPath(String source, String destination) {
+        Dijkstra dijkstra = new Dijkstra(Dijkstra.Element.EDGE, null, "weight");
+        dijkstra.init(graph);
+        dijkstra.setSource(graph.getNode(source));
+        dijkstra.compute();
+        Path path = dijkstra.getPath(graph.getNode(destination));
+        dijkstra.clear();
+        return path;
+    }
+
+    public void displayLinkLoads() {
+        System.out.println("Link loads after computation:");
+        for (Edge edge : graph.edges().toArray(Edge[]::new)) {
+            double load = edge.getAttribute("load", Double.class);
+            System.out.println("Edge " + edge.getId() + " Load: " + load);
         }
     }
 
     public void updateGraphColors() {
-        double maxLoad = linkLoads.values().stream().mapToDouble(Double::doubleValue).max().orElse(1.0); // Ensure there's a default to avoid division by zero
+        double maxLoad = linkLoads.values().stream().mapToDouble(Double::doubleValue).max().orElse(1.0);
         for (Edge edge : graph.edges().toArray(Edge[]::new)) {
             Double load = edge.getAttribute("load", Double.class);
-            load = (load != null) ? load : 0.0; // Default to zero if load is not set
+            load = (load != null) ? load : 0.0;
 
-            // Determine the color based on load thresholds
             String color;
             if (load < 0.5 * maxLoad) {
                 color = "green";
@@ -151,8 +184,8 @@ public class NetworkVisualizer {
 
     public void display() {
         Viewer viewer = graph.display();
-        viewer.setCloseFramePolicy(Viewer.CloseFramePolicy.HIDE_ONLY);  // Ensures the frame isn't disposed
-        viewer.enableAutoLayout();  // Optionally enable automatic layout
+        viewer.setCloseFramePolicy(Viewer.CloseFramePolicy.HIDE_ONLY);
+        viewer.enableAutoLayout();
     }
 
     public void changeLinkWeight() {
@@ -171,12 +204,6 @@ public class NetworkVisualizer {
                         e.setAttribute("ui.label", String.format("%.2f", newWeight));
                         System.out.println("Weight updated for edge " + edgeId + " to " + newWeight);
                         computeLinkLoads();  // Recompute loads
-                        System.out.println("Recomputing loads after weight update...");
-                        for (Edge edge : graph.edges().toArray(Edge[]::new)) {
-                            System.out.println("Edge: " + edge.getId() + ", Load: " + edge.getAttribute("load"));
-                        }
-                        computeLinkLoads();
-                        updateGraphColors();
                         refreshGraph();
                     } catch (NumberFormatException ex) {
                         System.out.println("Invalid weight format!");
@@ -191,8 +218,6 @@ public class NetworkVisualizer {
             System.out.println("Invalid input format!");
         }
     }
-
-
 
     public void refreshGraph() {
         for (Node node : graph) {
@@ -227,7 +252,7 @@ public class NetworkVisualizer {
             edge.setAttribute("weight", newWeight);
 
             // Recompute loads and cost with the new weight
-//            computeLinkLoads();
+            computeLinkLoads();
             double currentCost = computeTotalCost();
 
             if (currentCost < bestCost) {
@@ -238,10 +263,10 @@ public class NetworkVisualizer {
                 edge.setAttribute("weight", currentWeight);
             }
 
-//            if (iter % 100 == 0) {
-//                System.out.println("Intermediate stats after " + iter + " iterations:");
-//                displayLoadStatistics();
-//            }
+            if (iter % 100 == 0) {
+                System.out.println("Intermediate stats after " + iter + " iterations:");
+                displayLoadStatistics();
+            }
         }
     }
 
@@ -255,7 +280,6 @@ public class NetworkVisualizer {
         }
         return totalCost;
     }
-
 
     public void interactiveMode() {
         display();
@@ -286,8 +310,6 @@ public class NetworkVisualizer {
         }
     }
 
-
-
     public void displayLoadStatistics() {
         double totalLoad = 0.0;
         int count = 0;
@@ -309,11 +331,9 @@ public class NetworkVisualizer {
             if (load > maxLoad) maxLoad = load;
             if (load < minLoad) minLoad = load;
         }
-
         System.out.println("Max Load: " + maxLoad);
         System.out.println("Min Load: " + minLoad);
     }
-
 
     public static void main(String[] args) {
         NetworkVisualizer visualizer = new NetworkVisualizer();
@@ -329,5 +349,4 @@ public class NetworkVisualizer {
             e.printStackTrace();
         }
     }
-
 }
