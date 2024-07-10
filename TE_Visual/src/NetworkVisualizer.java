@@ -197,101 +197,6 @@ public class NetworkVisualizer {
     private JFrame statisticsFrame;
     private JTextArea statisticsArea;
 
-    private void createInputWindow() {
-        JFrame inputFrame = new JFrame("Input Data");
-        inputFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        inputFrame.setLayout(new GridLayout(6, 2)); // Adjusted layout
-
-        JLabel startLabel = new JLabel("Start Node:");
-        JTextField startField = new JTextField();
-        JLabel endLabel = new JLabel("End Node:");
-        JTextField endField = new JTextField();
-        JLabel dataLabel = new JLabel("Amount of Data to Transfer (bytes):");
-        JTextField dataField = new JTextField();
-        JLabel optimizationLabel = new JLabel("Method:");
-        JComboBox<String> optimizationComboBox = new JComboBox<>(new String[]{"Dijkstra", "Optimize Network (Based on Paper)", "Custom Weights"});
-        JButton calculateButton = new JButton("Calculate");
-        JButton exitButton = new JButton("Exit");
-
-        inputFrame.add(startLabel);
-        inputFrame.add(startField);
-        inputFrame.add(endLabel);
-        inputFrame.add(endField);
-        inputFrame.add(dataLabel);
-        inputFrame.add(dataField);
-        inputFrame.add(optimizationLabel);
-        inputFrame.add(optimizationComboBox);
-        inputFrame.add(new JLabel());  // Placeholder
-        inputFrame.add(new JLabel());  // Placeholder
-        inputFrame.add(calculateButton);
-        inputFrame.add(exitButton);
-
-        inputFrame.setSize(500, 300); // Adjusted size
-        inputFrame.setVisible(true);
-
-        // Action listener for the calculate button
-        calculateButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                // Reset all edge loads to zero
-                List<Edge> edges = graph.edges().collect(Collectors.toList());
-                for (Edge edge : edges) {
-                    edge.setAttribute("load", 0.0);
-                    updateEdgeLabel(edge);
-                }
-
-                final String startNode = startField.getText().trim();
-                final String endNode = endField.getText().trim();
-                final String dataAmount = dataField.getText().trim();
-                StringBuilder errorMessage = new StringBuilder();
-
-                if (graph.getNode(startNode) == null) {
-                    errorMessage.append("Start Node does not exist.\n");
-                }
-
-                if (graph.getNode(endNode) == null) {
-                    errorMessage.append("End Node does not exist.\n");
-                }
-
-                int data = 0;
-                try {
-                    data = Integer.parseInt(dataAmount);
-                } catch (NumberFormatException ex) {
-                    errorMessage.append("Amount of Data must be a valid integer.\n");
-                }
-
-                if (errorMessage.length() > 0) {
-                    JOptionPane.showMessageDialog(inputFrame, errorMessage.toString(), "Input Error", JOptionPane.ERROR_MESSAGE);
-                } else {
-                    System.out.println("Calculating path from " + startNode + " to " + endNode + " with data amount: " + data + " bytes.");
-                    int finalData = data;
-                    new Thread(() -> {
-                        String selectedMethod = (String) optimizationComboBox.getSelectedItem();
-                        if ("Optimize Network (Based on Paper)".equals(selectedMethod)) {
-                            optimizeNetworkWeights(startNode, endNode);
-                        } else if ("Dijkstra".equals(selectedMethod)) {
-                            calculateAndPrintBpsDijkstra(startNode, endNode, finalData);
-                        } else if ("Custom Weights".equals(selectedMethod)) {
-                            calculateWithCustomWeights(startNode, endNode, finalData);
-                        }
-                        calculateAndDisplayStatistics(statisticsFrame, statisticsArea); // Update statistics after calculation
-                    }).start();
-                }
-            }
-        });
-
-        // Action listener for the exit button
-        exitButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                System.exit(0);
-            }
-        });
-
-        // Display statistics window when the application starts
-        calculateAndDisplayStatistics(null, null);
-    }
-
     private void calculateWithCustomWeights(String startNode, String endNode, int data) {
         Dijkstra dijkstra = new Dijkstra(Dijkstra.Element.EDGE, null, "weight");
         dijkstra.init(graph);
@@ -541,19 +446,71 @@ public class NetworkVisualizer {
         this.statisticsArea = statisticsArea;
     }
 
-    private void displayChangeWeightsWindow() {
-        JFrame changeWeightsFrame = new JFrame("Change Weights and Capacity");
-        changeWeightsFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        changeWeightsFrame.setLayout(new GridLayout(0, 4)); // Use 0 for rows to dynamically add rows
+    private void createInputWindow() {
+        JFrame inputFrame = new JFrame("Input Data");
+        inputFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        inputFrame.setLayout(new BorderLayout());
 
+        JPanel inputPanel = new JPanel(new GridLayout(6, 2, 10, 10));
+        JLabel startLabel = new JLabel("Start Node:");
+        JTextField startField = new JTextField();
+        JLabel endLabel = new JLabel("End Node:");
+        JTextField endField = new JTextField();
+        JLabel dataLabel = new JLabel("Amount of Data to Transfer (bytes):");
+        JTextField dataField = new JTextField();
+        JLabel optimizationLabel = new JLabel("Method:");
+        JComboBox<String> optimizationComboBox = new JComboBox<>(new String[]{"Dijkstra", "Optimize Network (Based on Paper)", "Custom Weights"});
+        JButton calculateButton = new JButton("Calculate");
+        JButton exitButton = new JButton("Exit");
+
+        // Increase font sizes
+        Font font = new Font("Arial", Font.BOLD, 14);
+        startLabel.setFont(font);
+        endLabel.setFont(font);
+        dataLabel.setFont(font);
+        optimizationLabel.setFont(font);
+        startField.setFont(font);
+        endField.setFont(font);
+        dataField.setFont(font);
+        optimizationComboBox.setFont(font);
+        calculateButton.setFont(font);
+        exitButton.setFont(font);
+
+        inputPanel.add(startLabel);
+        inputPanel.add(startField);
+        inputPanel.add(endLabel);
+        inputPanel.add(endField);
+        inputPanel.add(dataLabel);
+        inputPanel.add(dataField);
+        inputPanel.add(optimizationLabel);
+        inputPanel.add(optimizationComboBox);
+        inputPanel.add(new JLabel());  // Placeholder
+        inputPanel.add(new JLabel());  // Placeholder
+        inputPanel.add(calculateButton);
+        inputPanel.add(exitButton);
+
+        inputFrame.add(inputPanel, BorderLayout.NORTH);
+
+        JPanel changeWeightsPanel = new JPanel(new BorderLayout());
+        JLabel changeWeightsTitle = new JLabel("<html><b>Change Weights and Capacity</b></html>", SwingConstants.CENTER);
+        changeWeightsTitle.setFont(new Font("Arial", Font.BOLD, 24));
+        changeWeightsPanel.add(changeWeightsTitle, BorderLayout.NORTH);
+
+        JPanel changeWeightsContent = new JPanel(new GridLayout(0, 4, 10, 10)); // Use 0 for rows to dynamically add rows
         List<Edge> edges = graph.edges().collect(Collectors.toList());
         Map<String, JTextField> weightFields = new HashMap<>();
         Map<String, JTextField> capacityFields = new HashMap<>();
 
-        changeWeightsFrame.add(new JLabel("Edge"));
-        changeWeightsFrame.add(new JLabel("Weight"));
-        changeWeightsFrame.add(new JLabel("Capacity"));
-        changeWeightsFrame.add(new JLabel("")); // Placeholder for layout
+        JLabel edgeHeader = new JLabel("Edge");
+        JLabel weightHeader = new JLabel("Weight");
+        JLabel capacityHeader = new JLabel("Capacity");
+        edgeHeader.setFont(font);
+        weightHeader.setFont(font);
+        capacityHeader.setFont(font);
+        changeWeightsContent.add(edgeHeader);
+        changeWeightsContent.add(weightHeader);
+        changeWeightsContent.add(capacityHeader);
+        changeWeightsContent.add(new JLabel("")); // Placeholder for layout
 
         for (Edge edge : edges) {
             String edgeId = edge.getId();
@@ -563,25 +520,91 @@ public class NetworkVisualizer {
             JLabel edgeLabel = new JLabel(edgeId);
             JTextField weightField = new JTextField(String.valueOf(currentWeight));
             JTextField capacityField = new JTextField(String.valueOf(currentCapacity));
+            edgeLabel.setFont(font);
+            weightField.setFont(font);
+            capacityField.setFont(font);
             weightFields.put(edgeId, weightField);
             capacityFields.put(edgeId, capacityField);
 
-            changeWeightsFrame.add(edgeLabel);
-            changeWeightsFrame.add(weightField);
-            changeWeightsFrame.add(capacityField);
-            changeWeightsFrame.add(new JLabel("")); // Placeholder for layout
+            changeWeightsContent.add(edgeLabel);
+            changeWeightsContent.add(weightField);
+            changeWeightsContent.add(capacityField);
+            changeWeightsContent.add(new JLabel("")); // Placeholder for layout
         }
 
+        changeWeightsPanel.add(changeWeightsContent, BorderLayout.CENTER);
+
+        JPanel applyButtonPanel = new JPanel();
         JButton applyButton = new JButton("Apply Changes");
-        changeWeightsFrame.add(applyButton);
-        changeWeightsFrame.add(new JLabel("")); // Placeholder
-        changeWeightsFrame.add(new JLabel("")); // Placeholder
-        changeWeightsFrame.add(new JLabel("")); // Placeholder
+        applyButton.setFont(font);
+        applyButtonPanel.add(applyButton);
+        changeWeightsPanel.add(applyButtonPanel, BorderLayout.SOUTH);
 
-        changeWeightsFrame.setSize(600, 400); // Adjust size as needed
-        changeWeightsFrame.setVisible(true);
+        inputFrame.add(changeWeightsPanel, BorderLayout.CENTER);
 
-        // Action listener for the apply button
+        inputFrame.setSize(600, 600); // Adjusted size
+        inputFrame.setVisible(true);
+
+        // Action listener for the calculate button
+        calculateButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                // Reset all edge loads to zero
+                List<Edge> edges = graph.edges().collect(Collectors.toList());
+                for (Edge edge : edges) {
+                    edge.setAttribute("load", 0.0);
+                    updateEdgeLabel(edge);
+                }
+
+                final String startNode = startField.getText().trim();
+                final String endNode = endField.getText().trim();
+                final String dataAmount = dataField.getText().trim();
+                StringBuilder errorMessage = new StringBuilder();
+
+                if (graph.getNode(startNode) == null) {
+                    errorMessage.append("Start Node does not exist.\n");
+                }
+
+                if (graph.getNode(endNode) == null) {
+                    errorMessage.append("End Node does not exist.\n");
+                }
+
+                int data = 0;
+                try {
+                    data = Integer.parseInt(dataAmount);
+                } catch (NumberFormatException ex) {
+                    errorMessage.append("Amount of Data must be a valid integer.\n");
+                }
+
+                if (errorMessage.length() > 0) {
+                    JOptionPane.showMessageDialog(inputFrame, errorMessage.toString(), "Input Error", JOptionPane.ERROR_MESSAGE);
+                } else {
+                    System.out.println("Calculating path from " + startNode + " to " + endNode + " with data amount: " + data + " bytes.");
+                    int finalData = data;
+                    new Thread(() -> {
+                        String selectedMethod = (String) optimizationComboBox.getSelectedItem();
+                        if ("Optimize Network (Based on Paper)".equals(selectedMethod)) {
+                            optimizeNetworkWeights(startNode, endNode);
+                        } else if ("Dijkstra".equals(selectedMethod)) {
+                            calculateAndPrintBpsDijkstra(startNode, endNode, finalData);
+                        } else if ("Custom Weights".equals(selectedMethod)) {
+                            calculateWithCustomWeights(startNode, endNode, finalData);
+                        }
+                        calculateAndDisplayStatistics(statisticsFrame, statisticsArea); // Update statistics after calculation
+                    }).start();
+                }
+            }
+        });
+
+        // Action listener for the exit button
+        exitButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                System.exit(0);
+            }
+        });
+
+        // Action listener for the apply button in the change weights section
         applyButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -600,14 +623,16 @@ public class NetworkVisualizer {
                             updateEdgeLabel(edge);
                         }
                     } catch (NumberFormatException ex) {
-                        JOptionPane.showMessageDialog(changeWeightsFrame, "Invalid input for edge: " + edgeId, "Input Error", JOptionPane.ERROR_MESSAGE);
+                        JOptionPane.showMessageDialog(inputFrame, "Invalid input for edge: " + edgeId, "Input Error", JOptionPane.ERROR_MESSAGE);
                     }
                 }
                 calculateAndDisplayStatistics(statisticsFrame, statisticsArea); // Update statistics after changing weights and capacities
             }
         });
-    }
 
+        // Display statistics window when the application starts
+        calculateAndDisplayStatistics(null, null);
+    }
 
     public static void main(String[] args) {
         NetworkVisualizer visualizer = new NetworkVisualizer();
@@ -615,7 +640,6 @@ public class NetworkVisualizer {
             visualizer.readLinkCosts("linkcosts.txt");
             visualizer.readWeights("weights.txt");
             visualizer.readLinkCapacities("linkcapacities.txt");
-            visualizer.displayChangeWeightsWindow(); // Display the "Change Weights and Capacity" window at startup
             visualizer.display();
         } catch (IOException e) {
             System.out.println("Error processing files or running interactive mode: " + e.getMessage());
