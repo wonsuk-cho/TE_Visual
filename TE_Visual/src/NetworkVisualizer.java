@@ -292,6 +292,7 @@ public class NetworkVisualizer {
         calculateAndDisplayStatistics(null, null);
     }
 
+
     private void calculateWithCustomWeights(String startNode, String endNode, int data) {
         Dijkstra dijkstra = new Dijkstra(Dijkstra.Element.EDGE, null, "weight");
         dijkstra.init(graph);
@@ -541,6 +542,72 @@ public class NetworkVisualizer {
         this.statisticsArea = statisticsArea;
     }
 
+    private void displayChangeWeightsWindow() {
+        JFrame changeWeightsFrame = new JFrame("Change Weights and Capacity");
+        changeWeightsFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        changeWeightsFrame.setLayout(new GridLayout(0, 4)); // Use 0 for rows to dynamically add rows
+
+        List<Edge> edges = graph.edges().collect(Collectors.toList());
+        Map<String, JTextField> weightFields = new HashMap<>();
+        Map<String, JTextField> capacityFields = new HashMap<>();
+
+        changeWeightsFrame.add(new JLabel("Edge"));
+        changeWeightsFrame.add(new JLabel("Weight"));
+        changeWeightsFrame.add(new JLabel("Capacity"));
+        changeWeightsFrame.add(new JLabel("")); // Placeholder for layout
+
+        for (Edge edge : edges) {
+            String edgeId = edge.getId();
+            double currentWeight = edge.getAttribute("weight") != null ? (double) edge.getAttribute("weight") : 0.0;
+            double currentCapacity = linkCapacities.getOrDefault(edgeId, 0.0);
+
+            JLabel edgeLabel = new JLabel(edgeId);
+            JTextField weightField = new JTextField(String.valueOf(currentWeight));
+            JTextField capacityField = new JTextField(String.valueOf(currentCapacity));
+            weightFields.put(edgeId, weightField);
+            capacityFields.put(edgeId, capacityField);
+
+            changeWeightsFrame.add(edgeLabel);
+            changeWeightsFrame.add(weightField);
+            changeWeightsFrame.add(capacityField);
+            changeWeightsFrame.add(new JLabel("")); // Placeholder for layout
+        }
+
+        JButton applyButton = new JButton("Apply Changes");
+        changeWeightsFrame.add(applyButton);
+        changeWeightsFrame.add(new JLabel("")); // Placeholder
+        changeWeightsFrame.add(new JLabel("")); // Placeholder
+        changeWeightsFrame.add(new JLabel("")); // Placeholder
+
+        changeWeightsFrame.setSize(600, 400); // Adjust size as needed
+        changeWeightsFrame.setVisible(true);
+
+        // Action listener for the apply button
+        applyButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                for (Map.Entry<String, JTextField> entry : weightFields.entrySet()) {
+                    String edgeId = entry.getKey();
+                    JTextField weightField = entry.getValue();
+                    JTextField capacityField = capacityFields.get(edgeId);
+
+                    try {
+                        double newWeight = Double.parseDouble(weightField.getText().trim());
+                        double newCapacity = Double.parseDouble(capacityField.getText().trim());
+                        Edge edge = graph.getEdge(edgeId);
+                        if (edge != null) {
+                            edge.setAttribute("weight", newWeight);
+                            linkCapacities.put(edgeId, newCapacity);
+                            updateEdgeLabel(edge);
+                        }
+                    } catch (NumberFormatException ex) {
+                        JOptionPane.showMessageDialog(changeWeightsFrame, "Invalid input for edge: " + edgeId, "Input Error", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+                calculateAndDisplayStatistics(statisticsFrame, statisticsArea); // Update statistics after changing weights and capacities
+            }
+        });
+    }
 
     public static void main(String[] args) {
         NetworkVisualizer visualizer = new NetworkVisualizer();
@@ -549,6 +616,7 @@ public class NetworkVisualizer {
             visualizer.readWeights("weights.txt");
             visualizer.readLinkCapacities("linkcapacities.txt");
             visualizer.display();
+            visualizer.displayChangeWeightsWindow(); // Display the "Change Weights and Capacity" window at startup
         } catch (IOException e) {
             System.out.println("Error processing files or running interactive mode: " + e.getMessage());
             e.printStackTrace();
