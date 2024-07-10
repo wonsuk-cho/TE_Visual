@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Scanner;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 public class NetworkVisualizer {
@@ -130,6 +129,18 @@ public class NetworkVisualizer {
         double capacity = linkCapacities.getOrDefault(e.getId(), 0.0);
         double loadPercentage = (capacity > 0) ? (load / capacity) * 100 : 0;
 
+        // Set edge color based on load percentage
+        String color;
+        if (loadPercentage > 75) {
+            color = "red";
+        } else if (loadPercentage > 50) {
+            color = "orange";
+        } else {
+            color = "green";
+        }
+
+        e.setAttribute("ui.style", "fill-color: " + color + ";");
+
         String label = String.format("Link Cost: %.2f\nWeight: %.2f\nLoad: %.2f%%", cost, weight, loadPercentage);
         e.setAttribute("ui.label", label);
     }
@@ -183,10 +194,13 @@ public class NetworkVisualizer {
         camera.resetView();
     }
 
+    private JFrame statisticsFrame;
+    private JTextArea statisticsArea;
+
     private void createInputWindow() {
         JFrame inputFrame = new JFrame("Input Data");
         inputFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        inputFrame.setLayout(new GridLayout(7, 2)); // Increase to 7 rows
+        inputFrame.setLayout(new GridLayout(6, 2)); // Adjusted layout
 
         JLabel startLabel = new JLabel("Start Node:");
         JTextField startField = new JTextField();
@@ -260,6 +274,7 @@ public class NetworkVisualizer {
                         } else if ("Custom Weights".equals(selectedMethod)) {
                             calculateWithCustomWeights(startNode, endNode, finalData);
                         }
+                        calculateAndDisplayStatistics(statisticsFrame, statisticsArea); // Update statistics after calculation
                     }).start();
                 }
             }
@@ -272,6 +287,9 @@ public class NetworkVisualizer {
                 System.exit(0);
             }
         });
+
+        // Display statistics window when the application starts
+        calculateAndDisplayStatistics(null, null);
     }
 
     private void calculateWithCustomWeights(String startNode, String endNode, int data) {
@@ -473,6 +491,56 @@ public class NetworkVisualizer {
 
         return totalCost;
     }
+
+    private void calculateAndDisplayStatistics(JFrame statisticsFrame, JTextArea statisticsArea) {
+        List<Double> loads = graph.edges().map(e -> {
+            double load = e.getAttribute("load") != null ? (double) e.getAttribute("load") : 0.0;
+            double capacity = linkCapacities.getOrDefault(e.getId(), 1.0);
+            return (capacity > 0) ? (load / capacity) * 100 : 0.0; // Convert load to percentage of capacity
+        }).collect(Collectors.toList());
+
+        double totalLoad = loads.stream().mapToDouble(Double::doubleValue).sum();
+        double averageLoad = totalLoad / loads.size();
+        double minLoad = loads.stream().mapToDouble(Double::doubleValue).min().orElse(0.0);
+        double maxLoad = loads.stream().mapToDouble(Double::doubleValue).max().orElse(0.0);
+
+        double totalBps = graph.edges().map(e -> (double) e.getAttribute("load")).mapToDouble(Double::doubleValue).sum();
+        double averageBps = totalBps / loads.size();
+        double minBps = graph.edges().map(e -> (double) e.getAttribute("load")).mapToDouble(Double::doubleValue).min().orElse(0.0);
+        double maxBps = graph.edges().map(e -> (double) e.getAttribute("load")).mapToDouble(Double::doubleValue).max().orElse(0.0);
+
+        StringBuilder statistics = new StringBuilder();
+        statistics.append(String.format("Average Load: %.2f%% (%.2f Bps)\n", averageLoad, averageBps));
+        statistics.append(String.format("Minimum Load: %.2f%% (%.2f Bps)\n", minLoad, minBps));
+        statistics.append(String.format("Maximum Load: %.2f%% (%.2f Bps)\n", maxLoad, maxBps));
+
+        // Update the statistics window
+        if (statisticsFrame != null && statisticsArea != null) {
+            statisticsArea.setText(statistics.toString());
+        } else {
+            displayStatisticsWindow(statistics.toString());
+        }
+    }
+
+    private void displayStatisticsWindow(String statistics) {
+        JFrame statisticsFrame = new JFrame("Network Statistics");
+        statisticsFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        statisticsFrame.setLayout(new BorderLayout());
+
+        JTextArea statisticsArea = new JTextArea(statistics);
+        statisticsArea.setEditable(false);
+        JScrollPane scrollPane = new JScrollPane(statisticsArea);
+
+        statisticsFrame.add(scrollPane, BorderLayout.CENTER);
+
+        statisticsFrame.setSize(500, 400);
+        statisticsFrame.setVisible(true);
+
+        // Store references to the frame and text area for updating
+        this.statisticsFrame = statisticsFrame;
+        this.statisticsArea = statisticsArea;
+    }
+
 
     public static void main(String[] args) {
         NetworkVisualizer visualizer = new NetworkVisualizer();
