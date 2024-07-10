@@ -1,8 +1,9 @@
 import org.graphstream.graph.*;
 import org.graphstream.graph.implementations.*;
 import org.graphstream.algorithm.Dijkstra;
-import org.graphstream.ui.view.Viewer;
+import org.graphstream.graph.Path;
 import org.graphstream.ui.view.View;
+import org.graphstream.ui.view.Viewer;
 import org.graphstream.ui.view.camera.Camera;
 
 import javax.swing.*;
@@ -12,11 +13,10 @@ import java.awt.event.ActionListener;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Scanner;
 import java.util.stream.Collectors;
+
 
 public class NetworkVisualizer {
     private Graph graph;
@@ -106,7 +106,7 @@ public class NetworkVisualizer {
                         Edge e = graph.getEdge(edgeId);
                         if (e != null) {
                             e.setAttribute("weight", weight);
-                            updateEdgeLabel(e);
+                            updateEdgeLabel(e); // Update the label after setting weight
                         } else {
                             System.out.println("Edge " + edgeId + " not found for weight.");
                         }
@@ -119,17 +119,12 @@ public class NetworkVisualizer {
         }
     }
 
+
     private void updateEdgeLabel(Edge e) {
-        double cost = e.getAttribute("linkcost") != null ? (double) e.getAttribute("linkcost") : 0.0;
-        double weight = e.getAttribute("weight") != null ? (double) e.getAttribute("weight") : 0.0;
-        double load = e.getAttribute("load") != null ? (double) e.getAttribute("load") : 0.0;
-
-        // Calculate load as a percentage of capacity
-        double capacity = linkCapacities.getOrDefault(e.getId(), 0.0);
-        double loadPercentage = (capacity > 0) ? (load / capacity) * 100 : 0;
-
-        String label = String.format("Link Cost: %.2f\nWeight: %.2f\nLoad: %.2f%%", cost, weight, loadPercentage);
-
+        double cost = e.getAttribute("linkcost") != null ? ((Number) e.getAttribute("linkcost")).doubleValue() : 0.0;
+        double weight = e.getAttribute("weight") != null ? ((Number) e.getAttribute("weight")).doubleValue() : 0.0;
+        double load = e.getAttribute("load") != null ? ((Number) e.getAttribute("load")).doubleValue() : 0.0;
+        String label = String.format("Link Cost: %.2f\nWeight: %.2f\nLoad: %.2f Bps", cost, weight, load);
         e.setAttribute("ui.label", label);
     }
 
@@ -240,21 +235,22 @@ public class NetworkVisualizer {
                 int data = 0;
                 try {
                     data = Integer.parseInt(dataAmount);
+                    if (data <= 0) {
+                        errorMessage.append("Amount of data to transfer must be a positive number.\n");
+                    }
                 } catch (NumberFormatException ex) {
-                    errorMessage.append("Amount of Data must be a valid integer.\n");
+                    errorMessage.append("Amount of data to transfer must be a valid number.\n");
                 }
 
                 if (errorMessage.length() > 0) {
                     JOptionPane.showMessageDialog(inputFrame, errorMessage.toString(), "Input Error", JOptionPane.ERROR_MESSAGE);
-                } else {
-                    System.out.println("Start Node: " + startNode + ", End Node: " + endNode + ", Data: " + data + " bytes, Method: " + method);
-                    if ("Dijkstra".equals(method)) {
-                        int finalData = data;
-                        new Thread(() -> calculateAndPrintBpsDijkstra(startNode, endNode, finalData)).start();
-                    } else if ("Balanced".equals(method)) {
-                        int finalData1 = data;
-                        new Thread(() -> calculateAndPrintBpsBalanced(startNode, endNode, finalData1)).start();
-                    }
+                    return;
+                }
+
+                if ("Dijkstra".equalsIgnoreCase(method)) {
+                    performDijkstra(startNode, endNode, data);
+                } else if ("Balanced".equalsIgnoreCase(method)) {
+                    performBalanced(startNode, endNode, data);
                 }
             }
         });
@@ -268,82 +264,56 @@ public class NetworkVisualizer {
         });
     }
 
-    private void calculateAndPrintBpsDijkstra(String startNode, String endNode, int data) {
-        Dijkstra dijkstra = new Dijkstra(Dijkstra.Element.EDGE, null, "linkcost");
+    private void performDijkstra(String startNode, String endNode, int data) {
+        Dijkstra dijkstra = new Dijkstra(Dijkstra.Element.EDGE, null, "weight");
         dijkstra.init(graph);
         dijkstra.setSource(graph.getNode(startNode));
         dijkstra.compute();
 
-        Path path = dijkstra.getPath(graph.getNode(endNode));
-        if (path == null) {
+        Path shortestPath = dijkstra.getPath(graph.getNode(endNode));
+        if (shortestPath != null) {
+            System.out.println("Shortest path from " + startNode + " to " + endNode + ": " + shortestPath);
+            updateEdgeLoads(shortestPath.getEdgePath(), data);
+        } else {
             System.out.println("No path found from " + startNode + " to " + endNode);
-            return;
         }
-
-        System.out.println("Path found: " + path.toString());
-
-        double totalData = data;
-        int cycles = 0;
-        while (totalData > 0) {
-            double minCapacity = Double.MAX_VALUE;
-            for (Edge edge : path.getEdgePath()) {
-                String edgeId = edge.getId();
-                double capacity = linkCapacities.getOrDefault(edgeId, 0.0);
-                if (capacity < minCapacity) {
-                    minCapacity = capacity;
-                }
-            }
-
-            double bps = Math.min(totalData, minCapacity);
-            totalData -= bps;
-
-            // Reset the load for each edge before calculating the new load
-            for (Edge edge : path.getEdgePath()) {
-                edge.setAttribute("load", 0.0);
-            }
-
-            for (Edge edge : path.getEdgePath()) {
-                String edgeId = edge.getId();
-                double capacity = linkCapacities.getOrDefault(edgeId, 0.0);
-                double dataTransferred = Math.min(bps, capacity);
-                edge.setAttribute("load", dataTransferred);
-                updateEdgeLabel(edge);
-                System.out.println("Edge " + edgeId + ": " + dataTransferred + " Bps");
-            }
-
-            System.out.println("Remaining data: " + totalData + " bytes");
-            cycles++;
-            System.out.println("Elapsed time: " + cycles + " seconds");
-
-            // Repaint the graph view to reflect the changes
-            graph.nodes().forEach(node -> node.setAttribute("ui.label", node.getAttribute("ui.label")));
-            graph.edges().forEach(edge -> edge.setAttribute("ui.label", edge.getAttribute("ui.label")));
-
-            try {
-                Thread.sleep(1000); // Simulate 1 second per cycle
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-            }
-        }
-
-        dijkstra.clear();
     }
 
-    private void calculateAndPrintBpsBalanced(String startNode, String endNode, int data) {
+    private void updateEdgeLoads(List<Edge> edges, int data) {
+        for (Edge edge : edges) {
+            double currentLoad = edge.getAttribute("load") != null ? ((Number) edge.getAttribute("load")).doubleValue() : 0.0;
+            double newLoad = currentLoad + calculateLoad(edge, data);
+            edge.setAttribute("load", newLoad);
+            updateEdgeLabel(edge);
+        }
+    }
+
+    private double calculateLoad(Edge edge, int data) {
+        double weight = ((Number) edge.getAttribute("weight")).doubleValue();
+        double load = data / weight;
+        return load;
+    }
+
+    private void performBalanced(String startNode, String endNode, int data) {
+        // Implement your balanced routing algorithm here
+        // This is a placeholder method
         System.out.println("Balanced method is not yet implemented.");
-        // Placeholder for balanced method implementation
     }
 
     public static void main(String[] args) {
-        NetworkVisualizer visualizer = new NetworkVisualizer();
-        try {
-            visualizer.readLinkCosts("linkcosts.txt");
-            visualizer.readWeights("weights.txt");
-            visualizer.readLinkCapacities("linkcapacities.txt");
-            visualizer.display();
-        } catch (IOException e) {
-            System.out.println("Error processing files or running interactive mode: " + e.getMessage());
-            e.printStackTrace();
-        }
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                NetworkVisualizer visualizer = new NetworkVisualizer();
+                try {
+                    visualizer.readLinkCosts("linkcosts.txt");
+                    visualizer.readWeights("weights.txt");
+                    visualizer.readLinkCapacities("linkcapacities.txt");
+                    visualizer.display();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
     }
 }

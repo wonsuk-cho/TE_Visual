@@ -17,6 +17,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
 
 public class NetworkVisualizer {
     private Graph graph;
@@ -123,13 +127,7 @@ public class NetworkVisualizer {
         double cost = e.getAttribute("linkcost") != null ? (double) e.getAttribute("linkcost") : 0.0;
         double weight = e.getAttribute("weight") != null ? (double) e.getAttribute("weight") : 0.0;
         double load = e.getAttribute("load") != null ? (double) e.getAttribute("load") : 0.0;
-
-        // Calculate load as a percentage of capacity
-        double capacity = linkCapacities.getOrDefault(e.getId(), 0.0);
-        double loadPercentage = (capacity > 0) ? (load / capacity) * 100 : 0;
-
-        String label = String.format("Link Cost: %.2f\nWeight: %.2f\nLoad: %.2f%%", cost, weight, loadPercentage);
-
+        String label = String.format("Link Cost: %.2f\nWeight: %.2f\nLoad: %.2f Bps", cost, weight, load);
         e.setAttribute("ui.label", label);
     }
 
@@ -330,8 +328,101 @@ public class NetworkVisualizer {
     }
 
     private void calculateAndPrintBpsBalanced(String startNode, String endNode, int data) {
-        System.out.println("Balanced method is not yet implemented.");
-        // Placeholder for balanced method implementation
+        List<Path> allPaths = findAllPaths(startNode, endNode);
+        if (allPaths.isEmpty()) {
+            System.out.println("No paths found from " + startNode + " to " + endNode);
+            return;
+        }
+
+        System.out.println("Paths found: " + allPaths.size());
+
+        double totalData = data;
+        int cycles = 0;
+        while (totalData > 0) {
+            double maxMinCapacity = Double.MIN_VALUE;
+            Path selectedPath = null;
+
+            // Find the path with the highest minimum capacity
+            for (Path path : allPaths) {
+                double pathMinCapacity = findPathMinCapacity(path);
+                if (pathMinCapacity > maxMinCapacity) {
+                    maxMinCapacity = pathMinCapacity;
+                    selectedPath = path;
+                }
+            }
+
+            if (selectedPath == null) {
+                System.out.println("No path available with sufficient capacity.");
+                return;
+            }
+
+            double bps = Math.min(totalData, maxMinCapacity);
+            totalData -= bps;
+
+            // Reset the load for each edge before calculating the new load
+            for (Edge edge : selectedPath.getEdgePath()) {
+                edge.setAttribute("load", 0.0);
+            }
+
+            for (Edge edge : selectedPath.getEdgePath()) {
+                String edgeId = edge.getId();
+                double capacity = linkCapacities.getOrDefault(edgeId, 0.0);
+                double dataTransferred = Math.min(bps, capacity);
+                edge.setAttribute("load", dataTransferred);
+                updateEdgeLabel(edge);
+                System.out.println("Edge " + edgeId + ": " + dataTransferred + " Bps");
+            }
+
+            System.out.println("Remaining data: " + totalData + " bytes");
+            cycles++;
+            System.out.println("Elapsed time: " + cycles + " seconds");
+
+            // Repaint the graph view to reflect the changes
+            graph.nodes().forEach(node -> node.setAttribute("ui.label", node.getAttribute("ui.label")));
+            graph.edges().forEach(edge -> edge.setAttribute("ui.label", edge.getAttribute("ui.label")));
+
+            try {
+                Thread.sleep(1000); // Simulate 1 second per cycle
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+
+
+    private List<Path> findAllPaths(String startNode, String endNode) {
+        Dijkstra dijkstra = new Dijkstra(Dijkstra.Element.EDGE, null, "linkcost");
+        dijkstra.init(graph);
+        dijkstra.setSource(graph.getNode(startNode));
+        dijkstra.compute();
+
+        // Get all paths from startNode to endNode
+        List<Path> allPaths = new ArrayList<>();
+        Iterator<? extends Node> nodeIterator = graph.getNode(startNode).getBreadthFirstIterator();
+        while (nodeIterator.hasNext()) {
+            Node node = nodeIterator.next();
+            Path path = dijkstra.getPath(node);
+            if (path != null && node.getId().equals(endNode)) {
+                allPaths.add(path);
+            }
+        }
+
+        dijkstra.clear();
+        return allPaths;
+    }
+
+
+    private double findPathMinCapacity(Path path) {
+        double minCapacity = Double.MAX_VALUE;
+        for (Edge edge : path.getEdgePath()) {
+            String edgeId = edge.getId();
+            double capacity = linkCapacities.getOrDefault(edgeId, 0.0);
+            if (capacity < minCapacity) {
+                minCapacity = capacity;
+            }
+        }
+        return minCapacity;
     }
 
     public static void main(String[] args) {

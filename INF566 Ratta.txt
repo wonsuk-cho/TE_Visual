@@ -30,4 +30,7 @@ Do {
         Compute_link_load(); 
        (arg_max,max_link_load)=compute_max_link_load().   // Get the max over all the links. arg_max is the id of the most loaded link. 
 } while (significant changes)   // We stop the loop when there is no significant gain (say less than 1%)
-     
+
+A traffic matrix can not be defined on edges (of a graph). You can have traffic t(A,E) from A to E, while link A-E does not exist (but there is a path, stay A-B-C-D-E) — that's why we have rowing protocols… You thus need to map traffic to links (edges), which requires a routing computation, then the traffic t(A,E)  with be added on all the links of the path(s), say A-B B-C C-D and D-E.  If you change the link weights, then routing might potenttally change so traffic will be redistributed on different paths (hence different links).
+
+So far you change weights  (randomly) but it does not affect routing…. Traffic is till the same on all the links. As load is weiight*traffic in your code (which again does not make any sense), the smaller the weight, the better, that explains why your weights are simply slowly getting to zero…
