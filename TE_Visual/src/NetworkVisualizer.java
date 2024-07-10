@@ -141,7 +141,7 @@ public class NetworkVisualizer {
 
         e.setAttribute("ui.style", "fill-color: " + color + ";");
 
-        String label = String.format("Link Cost: %.2f\nWeight: %.2f\nLoad: %.2f%%", cost, weight, loadPercentage);
+        String label = String.format("Link Cost: %.2f | Weight: %.2f | Load: %.2f%%", cost, weight, loadPercentage);
         e.setAttribute("ui.label", label);
     }
 
