@@ -15,9 +15,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.Scanner;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 public class NetworkVisualizer {
@@ -131,6 +129,7 @@ public class NetworkVisualizer {
         double loadPercentage = (capacity > 0) ? (load / capacity) * 100 : 0;
 
         String label = String.format("Link Cost: %.2f\nWeight: %.2f\nLoad: %.2f%%", cost, weight, loadPercentage);
+
         e.setAttribute("ui.label", label);
     }
 
@@ -186,7 +185,7 @@ public class NetworkVisualizer {
     private void createInputWindow() {
         JFrame inputFrame = new JFrame("Input Data");
         inputFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        inputFrame.setLayout(new GridLayout(7, 2)); // Increase to 7 rows
+        inputFrame.setLayout(new GridLayout(5, 2));
 
         JLabel startLabel = new JLabel("Start Node:");
         JTextField startField = new JTextField();
@@ -194,8 +193,8 @@ public class NetworkVisualizer {
         JTextField endField = new JTextField();
         JLabel dataLabel = new JLabel("Amount of Data to Transfer (bytes):");
         JTextField dataField = new JTextField();
-        JLabel optimizationLabel = new JLabel("Method:");
-        JComboBox<String> optimizationComboBox = new JComboBox<>(new String[]{"Dijkstra", "Optimize Network (Based on Paper)", "Custom Weights"});
+        JLabel methodLabel = new JLabel("Method:");
+        JComboBox<String> methodComboBox = new JComboBox<>(new String[]{"Dijkstra", "Balanced"});
         JButton calculateButton = new JButton("Calculate");
         JButton exitButton = new JButton("Exit");
 
@@ -205,14 +204,12 @@ public class NetworkVisualizer {
         inputFrame.add(endField);
         inputFrame.add(dataLabel);
         inputFrame.add(dataField);
-        inputFrame.add(optimizationLabel);
-        inputFrame.add(optimizationComboBox);
-        inputFrame.add(new JLabel());  // Placeholder
-        inputFrame.add(new JLabel());  // Placeholder
+        inputFrame.add(methodLabel);
+        inputFrame.add(methodComboBox);
         inputFrame.add(calculateButton);
         inputFrame.add(exitButton);
 
-        inputFrame.setSize(500, 300); // Adjusted size
+        inputFrame.setSize(500, 250);
         inputFrame.setVisible(true);
 
         // Action listener for the calculate button
@@ -229,6 +226,7 @@ public class NetworkVisualizer {
                 final String startNode = startField.getText().trim();
                 final String endNode = endField.getText().trim();
                 final String dataAmount = dataField.getText().trim();
+                final String method = (String) methodComboBox.getSelectedItem();
                 StringBuilder errorMessage = new StringBuilder();
 
                 if (graph.getNode(startNode) == null) {
@@ -249,18 +247,14 @@ public class NetworkVisualizer {
                 if (errorMessage.length() > 0) {
                     JOptionPane.showMessageDialog(inputFrame, errorMessage.toString(), "Input Error", JOptionPane.ERROR_MESSAGE);
                 } else {
-                    System.out.println("Calculating path from " + startNode + " to " + endNode + " with data amount: " + data + " bytes.");
-                    int finalData = data;
-                    new Thread(() -> {
-                        String selectedMethod = (String) optimizationComboBox.getSelectedItem();
-                        if ("Optimize Network (Based on Paper)".equals(selectedMethod)) {
-                            optimizeNetworkWeights(startNode, endNode);
-                        } else if ("Dijkstra".equals(selectedMethod)) {
-                            calculateAndPrintBpsDijkstra(startNode, endNode, finalData);
-                        } else if ("Custom Weights".equals(selectedMethod)) {
-                            calculateWithCustomWeights(startNode, endNode, finalData);
-                        }
-                    }).start();
+                    System.out.println("Start Node: " + startNode + ", End Node: " + endNode + ", Data: " + data + " bytes, Method: " + method);
+                    if ("Dijkstra".equals(method)) {
+                        int finalData = data;
+                        new Thread(() -> calculateAndPrintBpsDijkstra(startNode, endNode, finalData)).start();
+                    } else if ("Balanced".equals(method)) {
+                        int finalData1 = data;
+                        new Thread(() -> calculateAndPrintBpsBalanced(startNode, endNode, finalData1)).start();
+                    }
                 }
             }
         });
@@ -273,64 +267,6 @@ public class NetworkVisualizer {
             }
         });
     }
-
-    private void calculateWithCustomWeights(String startNode, String endNode, int data) {
-        Dijkstra dijkstra = new Dijkstra(Dijkstra.Element.EDGE, null, "weight");
-        dijkstra.init(graph);
-        dijkstra.setSource(graph.getNode(startNode));
-        dijkstra.compute();
-
-        Path path = dijkstra.getPath(graph.getNode(endNode));
-        if (path == null) {
-            System.out.println("No path found from " + startNode + " to " + endNode);
-            return;
-        }
-
-        System.out.println("Path found: " + path.toString());
-
-        double totalData = data;
-        int cycles = 0;
-        while (totalData > 0) {
-            double minCapacity = Double.MAX_VALUE;
-            for (Edge edge : path.getEdgePath()) {
-                String edgeId = edge.getId();
-                double capacity = linkCapacities.getOrDefault(edgeId, 0.0);
-                if (capacity < minCapacity) {
-                    minCapacity = capacity;
-                }
-            }
-
-            double bps = Math.min(totalData, minCapacity);
-            totalData -= bps;
-
-            // Reset the load for each edge before calculating the new load
-            for (Edge edge : path.getEdgePath()) {
-                edge.setAttribute("load", bps);
-            }
-
-            for (Edge edge : path.getEdgePath()) {
-                updateEdgeLabel(edge);
-                System.out.println("Edge " + edge.getId() + ": Sent " + bps + " Bps");
-            }
-
-            System.out.println("Remaining data: " + totalData + " bytes");
-            cycles++;
-            System.out.println("Elapsed time: " + cycles + " seconds");
-
-            // Repaint the graph view to reflect the changes
-            graph.nodes().forEach(node -> node.setAttribute("ui.label", node.getAttribute("ui.label")));
-            graph.edges().forEach(edge -> edge.setAttribute("ui.label", edge.getAttribute("ui.label")));
-
-            try {
-                Thread.sleep(1000); // Simulate 1 second per cycle
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-            }
-        }
-
-        dijkstra.clear();
-    }
-
 
     private void calculateAndPrintBpsDijkstra(String startNode, String endNode, int data) {
         Dijkstra dijkstra = new Dijkstra(Dijkstra.Element.EDGE, null, "linkcost");
@@ -363,12 +299,16 @@ public class NetworkVisualizer {
 
             // Reset the load for each edge before calculating the new load
             for (Edge edge : path.getEdgePath()) {
-                edge.setAttribute("load", bps);
+                edge.setAttribute("load", 0.0);
             }
 
             for (Edge edge : path.getEdgePath()) {
+                String edgeId = edge.getId();
+                double capacity = linkCapacities.getOrDefault(edgeId, 0.0);
+                double dataTransferred = Math.min(bps, capacity);
+                edge.setAttribute("load", dataTransferred);
                 updateEdgeLabel(edge);
-                System.out.println("Edge " + edge.getId() + ": Sent " + bps + " Bps");
+                System.out.println("Edge " + edgeId + ": " + dataTransferred + " Bps");
             }
 
             System.out.println("Remaining data: " + totalData + " bytes");
@@ -389,89 +329,9 @@ public class NetworkVisualizer {
         dijkstra.clear();
     }
 
-    private void optimizeNetworkWeights(String startNode, String endNode) {
-        Random random = new Random();
-        int wmax = 20; // Maximum weight value to ensure weights are within a reasonable range
-
-        // Initial solution: set all weights randomly between 1 and wmax
-        graph.edges().forEach(edge -> {
-            int initialWeight = random.nextInt(wmax) + 1; // Random weight between 1 and wmax
-            edge.setAttribute("weight", (double) initialWeight);
-            updateEdgeLabel(edge);
-        });
-
-        // Calculate the shortest path from startNode to endNode using initial weights
-        Dijkstra dijkstra = new Dijkstra(Dijkstra.Element.EDGE, null, "weight");
-        dijkstra.init(graph);
-        dijkstra.setSource(graph.getNode(startNode));
-        dijkstra.compute();
-        Path path = dijkstra.getPath(graph.getNode(endNode));
-
-        if (path == null) {
-            System.out.println("No path found from " + startNode + " to " + endNode);
-            return;
-        }
-
-        // Perform local search on the edges in the path
-        for (int iteration = 0; iteration < 5000; iteration++) {
-            Edge bestEdge = null;
-            double bestCost = Double.MAX_VALUE;
-            int bestWeight = 0;
-
-            for (Edge edge : path.getEdgePath()) {
-                int currentWeight = ((Double) edge.getAttribute("weight")).intValue();
-
-                for (int newWeight = 1; newWeight <= wmax; newWeight++) {
-                    if (newWeight == currentWeight) continue;
-
-                    edge.setAttribute("weight", (double) newWeight);
-                    double cost = evaluateNetworkCost();
-
-                    if (cost < bestCost) {
-                        bestCost = cost;
-                        bestEdge = edge;
-                        bestWeight = newWeight;
-                    }
-                }
-
-                edge.setAttribute("weight", (double) currentWeight); // Restore original weight
-            }
-
-            if (bestEdge != null) {
-                bestEdge.setAttribute("weight", (double) bestWeight);
-                updateEdgeLabel(bestEdge);
-            }
-        }
-    }
-
-    private double evaluateNetworkCost() {
-        double totalCost = 0.0;
-
-        for (Edge edge : graph.edges().collect(Collectors.toList())) {
-            double load = (double) edge.getAttribute("load");
-            double capacity = linkCapacities.getOrDefault(edge.getId(), 1.0);
-            double utilization = load / capacity;
-
-            // Piecewise linear cost function as described in the paper
-            double cost;
-            if (utilization < 1.0 / 3.0) {
-                cost = utilization;
-            } else if (utilization < 2.0 / 3.0) {
-                cost = 3 * utilization - 2.0 / 3.0;
-            } else if (utilization < 9.0 / 10.0) {
-                cost = 10 * utilization - 16.0 / 3.0;
-            } else if (utilization < 1.0) {
-                cost = 70 * utilization - 178.0 / 3.0;
-            } else if (utilization < 11.0 / 10.0) {
-                cost = 500 * utilization - 1468.0 / 3.0;
-            } else {
-                cost = 5000 * utilization - 19468.0 / 3.0;
-            }
-
-            totalCost += cost;
-        }
-
-        return totalCost;
+    private void calculateAndPrintBpsBalanced(String startNode, String endNode, int data) {
+        System.out.println("Balanced method is not yet implemented.");
+        // Placeholder for balanced method implementation
     }
 
     public static void main(String[] args) {
