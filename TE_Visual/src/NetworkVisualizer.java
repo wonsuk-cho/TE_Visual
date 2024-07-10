@@ -316,6 +316,9 @@ public class NetworkVisualizer {
         Random random = new Random();
         int wmax = 20; // Maximum weight value to ensure weights are within a reasonable range
 
+        // HashMap to store evaluated edge weight combinations and their corresponding costs
+        Map<String, Double> evaluatedCombinations = new HashMap<>();
+
         // Initial solution: set all weights randomly between 1 and wmax
         graph.edges().forEach(edge -> {
             int initialWeight = random.nextInt(wmax) + 1; // Random weight between 1 and wmax
@@ -347,9 +350,28 @@ public class NetworkVisualizer {
                 for (int newWeight = 1; newWeight <= wmax; newWeight++) {
                     if (newWeight == currentWeight) continue;
 
+                    // Create a unique key for the edge and new weight combination
+                    String combinationKey = edge.getId() + "-" + newWeight;
+
+                    // Check if this combination has already been evaluated
+                    if (evaluatedCombinations.containsKey(combinationKey)) {
+                        double cachedCost = evaluatedCombinations.get(combinationKey);
+                        if (cachedCost < bestCost) {
+                            bestCost = cachedCost;
+                            bestEdge = edge;
+                            bestWeight = newWeight;
+                        }
+                        continue;
+                    }
+
+                    // Set new weight and evaluate network cost
                     edge.setAttribute("weight", (double) newWeight);
                     double cost = evaluateNetworkCost();
 
+                    // Store the evaluated cost in the HashMap
+                    evaluatedCombinations.put(combinationKey, cost);
+
+                    // Update the best cost, edge, and weight if the new cost is better
                     if (cost < bestCost) {
                         bestCost = cost;
                         bestEdge = edge;
@@ -357,15 +379,18 @@ public class NetworkVisualizer {
                     }
                 }
 
-                edge.setAttribute("weight", (double) currentWeight); // Restore original weight
+                // Restore the original weight of the edge
+                edge.setAttribute("weight", (double) currentWeight);
             }
 
+            // Apply the best found weight to the corresponding edge
             if (bestEdge != null) {
                 bestEdge.setAttribute("weight", (double) bestWeight);
                 updateEdgeLabel(bestEdge);
             }
         }
     }
+
 
     private double evaluateNetworkCost() {
         double totalCost = 0.0;
